@@ -1,0 +1,77 @@
+name: Keep Galaxy Cloud App Active
+
+on:
+  schedule:
+    # 每天北京时间上午10点运行 (UTC 2:00)
+    # 可根据需要调整频率
+    - cron: '0 2 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+      
+      - name: Update README with timestamp
+        run: |
+          # 获取当前时间
+          TIMESTAMP=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S CST')
+          
+          # 确保 README.md 存在
+          if [ ! -f README.md ]; then
+            echo "# ${GITHUB_REPOSITORY#*/}" > README.md
+            echo "" >> README.md
+            echo "This project is automatically kept active on Galaxy Cloud." >> README.md
+          fi
+          
+          # 更新或添加时间戳部分
+          if grep -q "<!-- AUTO-UPDATE-START -->" README.md; then
+            # 如果标记存在,替换整个区块
+            sed -i '/<!-- AUTO-UPDATE-START -->/,/<!-- AUTO-UPDATE-END -->/c\<!-- AUTO-UPDATE-START -->\n**🤖 Last auto-update:** '"$TIMESTAMP"'\n<!-- AUTO-UPDATE-END -->' README.md
+          else
+            # 如果标记不存在,添加到文件末尾
+            echo "" >> README.md
+            echo "---" >> README.md
+            echo "<!-- AUTO-UPDATE-START -->" >> README.md
+            echo "**🤖 Last auto-update:** $TIMESTAMP" >> README.md
+            echo "<!-- AUTO-UPDATE-END -->" >> README.md
+          fi
+          
+          echo "Updated timestamp: $TIMESTAMP"
+      
+      - name: Commit and push changes
+        run: |
+          git add README.md
+          
+          # 检查是否有更改
+          if git diff --staged --quiet; then
+            echo "✅ No changes to commit"
+            exit 0
+          fi
+          
+          # 提交更改
+          git commit -m "chore: auto-update timestamp [skip ci]"
+          
+          # 推送更改
+          git push origin HEAD:${GITHUB_REF#refs/heads/}
+          
+          echo "✅ Successfully pushed updates"
+      
+      - name: Deployment triggered
+        run: |
+          echo "🚀 Changes pushed to trigger Galaxy Cloud deployment"
+          echo "⏰ Next run will be in 24 hours"
